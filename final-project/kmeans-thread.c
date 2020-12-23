@@ -1,19 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <pthread.h>
 
+// Número de threads a serem utilizadas
+#define N_THREADS 4
+
+// Tipo de dado: k_means
 typedef struct{
     int n_instances, n_features, n_clusters;
     double **instances, **centroids;
     int *labels;
-} dataset;
+} k_means;
+
+// Tipo de dado: argumentos
+typedef struct {
+    k_means *k_m;
+    int begin_offset, end_offset;
+} arguments;
 
 //------------------------------------------------------------------------------
 
-void create_artificial_dataset(dataset *ds){
+void create_artificial_k_means(k_means *ds){
 
     /*
-        Função que cria um dataset artificial.
+        Função que cria um k_means artificial.
     */
 
     // Instanciando a matriz de instâncias.
@@ -33,7 +44,7 @@ void create_artificial_dataset(dataset *ds){
 
 }
 
-void print_instances(dataset *ds){
+void print_instances(k_means *ds){
 
     /*
         Função que imprime as instâncias.
@@ -50,7 +61,7 @@ void print_instances(dataset *ds){
 
 //------------------------------------------------------------------------------
 
-void select_centroids(dataset *ds){
+void select_centroids(k_means *ds){
 
     /*
         Função que seleciona os centroides da primeira iteração.
@@ -70,7 +81,7 @@ void select_centroids(dataset *ds){
     }
 }
 
-void print_centroids(dataset *ds){
+void print_centroids(k_means *ds){
 
     /*
         Função que imprime os centroides.
@@ -90,7 +101,7 @@ void print_centroids(dataset *ds){
     printf("\n");
 }
 
-void print_labels(dataset *ds){
+void print_labels(k_means *ds){
 
     /*
         Função que imprime os rótulos.
@@ -106,10 +117,10 @@ void print_labels(dataset *ds){
 
 //------------------------------------------------------------------------------
 
-void free_dataset(dataset *ds){
+void free_k_means(k_means *ds){
 
     /*
-        Função que desaloca as dataset.
+        Função que desaloca as k_means.
     */
 
     for(int i = 0; i < ds->n_instances; i++){
@@ -132,40 +143,67 @@ void free_dataset(dataset *ds){
 
 //------------------------------------------------------------------------------
 
-int nearest_centroid_id(dataset *ds, int i){
+void *nearest_centroid_id(arguments *arg){
 
     int min_index;
     double current_dist, min_dist;
 
-    for (int c = 0; c < ds->n_clusters; c++){
+    printf("Begin and end: %d %d\n", arg->begin_offset, arg->end_offset);
 
-        current_dist = 0;
-        for (int f = 0; f < ds->n_features; f++)
-            current_dist += pow((ds->centroids[c][f] - ds->instances[i][f]), 2);
-        current_dist = sqrt(current_dist);
+    for (int i = arg->begin_offset; i <= arg->end_offset; i++) {
 
-        if(c == 0){
-            min_dist = current_dist;
-            min_index = c;
+        for (int c = 0; c < arg->k_m->n_clusters; c++){
+
+            current_dist = 0;
+            for (int f = 0; f < arg->k_m->n_features; f++)
+                current_dist += pow((arg->k_m->centroids[c][f] - arg->k_m->instances[i][f]), 2);
+            current_dist = sqrt(current_dist);
+
+            if(c == 0){
+                min_dist = current_dist;
+                min_index = c;
+            }
+
+            if(current_dist < min_dist){
+                min_dist = current_dist;
+                min_index = c;
+            }
         }
 
-        if(current_dist < min_dist){
-            min_dist = current_dist;
-            min_index = c;
+        arg->k_m->labels[i] = min_index;
+    }
+}
+
+void label_instances(k_means *ds){
+
+    pthread_t threads[N_THREADS];
+    arguments args[N_THREADS];
+    int r;
+    double a = ds->n_instances / (float) N_THREADS;
+
+    for (int t = 0; t < N_THREADS; t++) {
+
+        args[t].k_m = ds;
+        args[t].begin_offset = ceil(a * t);
+        args[t].end_offset = ceil(a * (t + 1)) - 1;
+
+        // Criando as threads
+        r = pthread_create(&threads[t], NULL, nearest_centroid_id, &args[t]);
+
+        if (r != 0) {
+            printf("Erro para criar thread (label instances)\n");
+            exit(0);
         }
+
     }
 
-    return min_index;
-}
-
-void label_instances_sequential(dataset *ds){
-
-    for (int i = 0; i < ds->n_instances; i++)
-        ds->labels[i] = nearest_centroid_id(ds, i); // Paralelizável \o/
+    // Espera todas as threads terminarem sua execução
+    for(int t = 0; t < N_THREADS; t++)
+        pthread_join(threads[t], NULL);
 
 }
 
-double update_centroids(dataset *ds){
+double update_centroids(k_means *ds){
 
     int counter;
     double aux, current_delta, mean_deltas = 0;
@@ -193,7 +231,7 @@ double update_centroids(dataset *ds){
 
 int main(int argc, char const *argv[]) {
 
-    dataset ds;
+    k_means ds;
     ds.n_instances = 10;
     ds.n_features = 3;
     ds.n_clusters = 2;
@@ -202,7 +240,7 @@ int main(int argc, char const *argv[]) {
     int iter = 0;
     int max_iter = 10;
 
-    create_artificial_dataset(&ds);
+    create_artificial_k_means(&ds);
     print_instances(&ds);
 
     select_centroids(&ds);
@@ -210,7 +248,7 @@ int main(int argc, char const *argv[]) {
 
     do {
         iter++;
-        label_instances_sequential(&ds);
+        label_instances(&ds);
         print_labels(&ds);
 
         mean_deltas = update_centroids(&ds);
@@ -219,6 +257,6 @@ int main(int argc, char const *argv[]) {
 
     } while(iter < max_iter && mean_deltas > tol);
 
-    free_dataset(&ds);
+    free_k_means(&ds);
     return 0;
 }
