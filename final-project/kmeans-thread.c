@@ -2,15 +2,19 @@
 #include <stdlib.h>
 #include <math.h>
 #include <pthread.h>
+#include <time.h>
 
 // Número de threads a serem utilizadas
 #define N_THREADS 4
+#define MAX_ITER 10
+#define TOL 0.0001
 
 // Tipo de dado: k_means
 typedef struct{
     int n_instances, n_features, n_clusters;
     double **instances, **centroids;
     int *labels;
+    double *displacement;
 } k_means;
 
 // Tipo de dado: argumentos
@@ -37,7 +41,7 @@ void create_artificial_dataset(k_means *km){
 
         // Atribuindo valores as features.
         for (int f = 0; f < km->n_features; f++)
-            km->instances[i][f] = i;//sqrt(i)*f*f;
+            km->instances[i][f] = sin(f+7)*cos(i+3)*(i+2);
     }
 
     // Alocando um vetor que contém os rótulos para cada istância.
@@ -80,6 +84,8 @@ void select_centroids(k_means *km){
         for (int f = 0; f < km->n_features; f++)
             km->centroids[c][f] = km->instances[c][f];
     }
+
+    km->displacement = (double *) calloc(km->n_clusters, sizeof(double));
 }
 
 void print_centroids(k_means *km){
@@ -97,6 +103,8 @@ void print_centroids(k_means *km){
     printf("\n");
 }
 
+
+
 void print_labels(k_means *km){
 
     /*
@@ -110,6 +118,55 @@ void print_labels(k_means *km){
     printf("\n");
 }
 
+
+void save_instances(k_means *km){
+
+    /*
+        Função que imprime as instâncias.
+    */
+
+    FILE *arq;
+
+    arq = fopen("instances.txt", "w");
+
+    for (int i = 0; i < km->n_instances; i++) {
+        for (int f = 0; f < km->n_features; f++)
+            fprintf(arq, "%lf ", km->instances[i][f]);
+        fprintf(arq, "\n");
+    }
+    fclose(arq);
+}
+
+void save_centroids(k_means *km){
+
+    /*
+        Função que salva os centroides.
+    */
+
+    FILE *arq;
+
+    arq = fopen("centroides.txt", "w");
+
+    for (int c = 0; c < km->n_clusters; c++) {
+        for (int f = 0; f < km->n_features; f++)
+            fprintf(arq, "%lf ", km->centroids[c][f]);
+        fprintf(arq, "\n");
+    }
+
+    fclose(arq);
+}
+
+void save_labels(k_means *km){
+
+    /*
+        Função que salve os rótulos.
+    */
+    FILE *arq;
+    arq = fopen("labels.txt", "w");
+    for (int i = 0; i < km->n_instances; i++)
+        fprintf(arq, "%d\n", km->labels[i]);
+    fclose(arq);
+}
 
 //------------------------------------------------------------------------------
 
@@ -129,9 +186,11 @@ void free_k_means(k_means *km){
         km->centroids[i] = NULL;
     }
 
+    free(km->displacement);
     free(km->instances);
     free(km->centroids);
     free(km->labels);
+    km->displacement = NULL;
     km->instances = NULL;
     km->centroids = NULL;
     km->labels = NULL;
@@ -148,8 +207,6 @@ void *nearest_centroid_id(arguments *arg){
 
     int min_index;
     double current_dist, min_dist;
-
-    printf("Begin and end: %d %d\n", arg->begin_offset, arg->end_offset);
 
     // Iterando entre as instâncias.
     for (int i = arg->begin_offset; i <= arg->end_offset; i++) {
@@ -207,28 +264,67 @@ void label_instances(k_means *km){
 
 }
 
-double update_centroids(k_means *km){
+
+void *update_centroid(arguments *arg){
 
     int counter;
-    double aux, current_delta, mean_deltas = 0;
+    double aux, current_delta;
 
-    for (int c = 0; c < km->n_clusters; c++) {
+    for(int c = arg->begin_offset; c <= arg->end_offset; c++){
         current_delta = 0;
-        for (int f = 0; f < km->n_features; f++){
+        for (int f = 0; f < arg->k_m->n_features; f++){
             counter = 0;
             aux = 0;
-            for (int i = 0; i < km->n_instances; i++){
-                if(km->labels[i] == c){
+            for (int i = 0; i < arg->k_m->n_instances; i++){
+                if(arg->k_m->labels[i] == c){
                     counter++;
-                    aux += km->instances[i][f];
+                    aux += arg->k_m->instances[i][f];
                 }
             }
-            current_delta += pow(km->centroids[c][f] - aux/counter, 2);
-            km->centroids[c][f] = aux/counter;
+            current_delta += pow(arg->k_m->centroids[c][f] - aux/counter, 2);
+            arg->k_m->centroids[c][f] = aux/counter;
         }
-        mean_deltas += sqrt(current_delta);
+        arg->k_m->displacement[c] += sqrt(current_delta);
     }
-    return mean_deltas/km->n_clusters;
+
+}
+
+double update_centroids(k_means *km){
+
+    int counter, r;
+    double sum_deltas = 0;
+    double a = km->n_clusters / (float) N_THREADS;
+
+    pthread_t threads[N_THREADS];
+    arguments args[N_THREADS];
+
+    // Zerando vetor de deslocamentos para nova iteração
+    for (int c = 0; c < km->n_clusters; c++)
+        km->displacement[c] = 0;
+
+    for (int t = 0; t < N_THREADS; t++) {
+
+        args[t].k_m = km;
+        args[t].begin_offset = ceil(a * t);
+        args[t].end_offset = ceil(a * (t + 1)) - 1;
+
+        // Criando as threads.
+        r = pthread_create(&threads[t], NULL, &update_centroid, &args[t]);
+
+        if (r != 0) {
+            printf("Erro para criar uma thread (update_centroids function)\n");
+            exit(0);
+        }
+    }
+
+    for (int t = 0; t < N_THREADS; t++)
+        pthread_join(threads[t], NULL);
+
+    for (int c = 0; c < km->n_clusters; c++)
+        sum_deltas += km->displacement[c];
+
+
+    return sum_deltas/km->n_clusters;
 }
 
 //------------------------------------------------------------------------------
@@ -238,13 +334,8 @@ int main(int argc, char const *argv[]) {
     // Instanciando uma struct do tipo k_means e variáveis.
     k_means km;
     km.n_instances = 10;
-    km.n_features = 3;
+    km.n_features = 2;
     km.n_clusters = 2;
-
-    // Instanciando critérios de parada.
-    double tol = 0.01, mean_deltas;
-    int iter = 0;
-    int max_iter = 10;
 
     create_artificial_dataset(&km);
     print_instances(&km);
@@ -252,16 +343,25 @@ int main(int argc, char const *argv[]) {
     select_centroids(&km);
     print_centroids(&km);
 
+    int iter = 0;
+    double mean_deltas;
+
     do {
         iter++;
         label_instances(&km);
-        print_labels(&km);
-
         mean_deltas = update_centroids(&km);
-        print_centroids(&km);
+
+        // Prints para a depuração
+        // print_labels(&km);
+        // print_centroids(&km);
+
         printf("Iteração: %d; Delta: %lf\n", iter, mean_deltas);
 
-    } while(iter < max_iter && mean_deltas > tol);
+    } while(iter < MAX_ITER && mean_deltas > TOL);
+
+    save_instances(&km);
+    save_centroids(&km);
+    save_labels(&km);
 
     free_k_means(&km);
     return 0;
