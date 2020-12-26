@@ -6,8 +6,15 @@
 
 // Número de threads a serem utilizadas
 #define N_THREADS 4
+
+// Define a condição de parada do algoritmo
 #define MAX_ITER 10
 #define TOL 0.0001
+
+// Define as quantidades de instâncias, características e grupos
+#define N_INSTANCES 100
+#define N_FEATURES 2
+#define N_CLUSTERS 7
 
 // Tipo de dado: k_means
 typedef struct{
@@ -31,6 +38,8 @@ void create_artificial_dataset(k_means *km){
         Função que cria um dataset artificial.
     */
 
+    srand(time(NULL));
+
     // Instanciando a matriz de instâncias.
     km->instances = (double **) malloc(km->n_instances*sizeof(double));
 
@@ -41,7 +50,7 @@ void create_artificial_dataset(k_means *km){
 
         // Atribuindo valores as features.
         for (int f = 0; f < km->n_features; f++)
-            km->instances[i][f] = sin(f+7)*cos(i+3)*(i+2);
+            km->instances[i][f] = sin(f+rand()%10)*cos(i+rand()%6)*(i+2)*pow(-1,rand()%2);
     }
 
     // Alocando um vetor que contém os rótulos para cada istância.
@@ -255,7 +264,6 @@ void label_instances(k_means *km){
             printf("Erro para criar uma thread (label_instances function)\n");
             exit(0);
         }
-
     }
 
     // Espera todas as threads terminarem sua execução.
@@ -333,15 +341,13 @@ int main(int argc, char const *argv[]) {
 
     // Instanciando uma struct do tipo k_means e variáveis.
     k_means km;
-    km.n_instances = 10;
-    km.n_features = 2;
-    km.n_clusters = 2;
+    km.n_instances = N_INSTANCES;
+    km.n_features = N_FEATURES;
+    km.n_clusters = N_CLUSTERS;
 
     create_artificial_dataset(&km);
-    print_instances(&km);
 
     select_centroids(&km);
-    print_centroids(&km);
 
     int iter = 0;
     double mean_deltas;
@@ -351,7 +357,7 @@ int main(int argc, char const *argv[]) {
         label_instances(&km);
         mean_deltas = update_centroids(&km);
 
-        // Prints para a depuração
+        // Prints para depuração
         // print_labels(&km);
         // print_centroids(&km);
 

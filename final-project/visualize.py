@@ -9,8 +9,9 @@ labels = open("labels.txt", "r")
 labels = [list(map(int, line.split())) for line in labels.readlines()]
 labels = np.array(labels).ravel()
 
-color_map = {0:'r', 1:'g', 2:'b', 3:'y'}
+color_map = {0:'r', 1:'g', 2:'b', 3:'y', 4:'k', 5:'crimson', 6:'mediumseagreen'}
 colors = [color_map[label] for label in labels]
 
 plt.scatter(lines[:, 0], lines[:, 1], color=colors)
+plt.grid(True)
 plt.show()
