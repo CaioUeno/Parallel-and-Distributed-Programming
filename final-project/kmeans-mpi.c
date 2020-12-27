@@ -191,12 +191,17 @@ void free_k_means(k_means *km){
 
 int nearest_centroid_id(double *inst, double *cent){
 
+    /*
+        Função que retorna o rótulo do centroide mais perto da instância dada.
+    */
+
     int min_index;
     double current_dist, min_dist;
     MPI_Status status;
 
     for (int c = 0; c < N_CLUSTERS; c++){
 
+        // Recebendo do mestre o vetor contendo o centroide corrente. 
         MPI_Recv(&cent[0], N_FEATURES, MPI_DOUBLE, 0, 99, MPI_COMM_WORLD, &status);
         // printf("Recebi o centroid. Mas qual? Não sei pepposad.\n");
 
@@ -219,13 +224,6 @@ int nearest_centroid_id(double *inst, double *cent){
 
     return min_index;
 }
-//
-// void label_instances_sequential(k_means *km){
-//
-//     for (int i = 0; i < km->n_instances; i++)
-//         km->labels[i] = nearest_centroid_id(km, i); // Paralelizável \o/
-//
-// }
 
 
 
@@ -249,6 +247,7 @@ int main(int argc, char **argv) {
     double *instance, *centroid;
     int iter = 0;
 
+    // Variáveis auxiliares para enviar instâncias e centroides como mensagens.
     instance = (double *) malloc(N_FEATURES*sizeof(double));
     centroid = (double *) malloc(N_FEATURES*sizeof(double));
     int label;
@@ -256,8 +255,10 @@ int main(int argc, char **argv) {
     do {
         iter++;
 
+        // Mestre
         if (rank == 0) {
 
+            // Somente o processo mestre possui os dados.
             k_means km;
             km.n_instances = N_INSTANCES;
             km.n_features = N_FEATURES;
@@ -272,30 +273,33 @@ int main(int argc, char **argv) {
 
                     if(i+p-1 < km.n_instances){
 
-
-                      for (int f = 0; f < km.n_features; f++)
+                        // Colocando a instância num vetor auxiliar.
+                        for (int f = 0; f < km.n_features; f++)
                         instance[f] = km.instances[i+p-1][f];
 
 
-                      // Manda uma instância
-                      MPI_Send(&instance[0], km.n_features, MPI_DOUBLE, p, 99, MPI_COMM_WORLD);
-                      // printf("Mestre mandou para trabalhador %d instância %d.\n", p, i+p-1);
+                        // Mandando a instância.
+                        MPI_Send(&instance[0], km.n_features, MPI_DOUBLE, p, 99, MPI_COMM_WORLD);
+                        // printf("Mestre mandou para trabalhador %d instância %d.\n", p, i+p-1);
 
+                        // Mandando cada um dos centroides.
+                        for (int c = 0; c < km.n_clusters; c++) {
 
-                      for (int c = 0; c < km.n_clusters; c++) {
-
-                          for (int f = 0; f < km.n_features; f++)
+                            // Colocando o centroide num vetor auxiliar.
+                            for (int f = 0; f < km.n_features; f++)
                             centroid[f] = km.centroids[c][f];
 
-                          MPI_Send(&centroid[0], N_FEATURES, MPI_DOUBLE, p, 99, MPI_COMM_WORLD);
-                          // printf("Mestre mandou para trabalhador %d centroide %d.\n", p, c);
-                      }
+                            // Mandando o centroide.
+                            MPI_Send(&centroid[0], N_FEATURES, MPI_DOUBLE, p, 99, MPI_COMM_WORLD);
+                            // printf("Mestre mandou para trabalhador %d centroide %d.\n", p, c);
+                        }
 
-                      // Recebendo do trabalhador o rótulo
-                      MPI_Recv(&label, 1, MPI_INT, p, 99, MPI_COMM_WORLD, &status);
-                      // printf("Mestre recebeu do trabalhador %d rótulo da instância %d.\n", p, i+p-1);
+                        // Recebendo do trabalhador p o rótulo do centroide mais perto da instância enviada anteriormente.
+                        MPI_Recv(&label, 1, MPI_INT, p, 99, MPI_COMM_WORLD, &status);
+                        // printf("Mestre recebeu do trabalhador %d rótulo da instância %d.\n", p, i+p-1);
 
-                      km.labels[i+p-1] = label;
+                        // Atribuindo o rótulo no vetor de rótulos.
+                        km.labels[i+p-1] = label;
                     }
                 }
             }
@@ -308,16 +312,19 @@ int main(int argc, char **argv) {
             free_k_means(&km);
         }
 
+        // Trabalhadores
         else{
 
 
             for(int i = rank-1; i < N_INSTANCES; i = i+size-1) {
 
-                // Recebendo do mestre a instância
+                // Recebendo do mestre uma instância.
                 MPI_Recv(&instance[0], N_FEATURES, MPI_DOUBLE, 0, 99, MPI_COMM_WORLD, &status);
                 // printf("Trabalhador %d recebeu do mestre instância %d.\n", rank, i);
-
+                
                 label = nearest_centroid_id(instance, centroid);
+
+                // Mandando para o mestre o rótulo do centroide mais perto da instância recebida.
                 MPI_Send(&label, 1, MPI_INT, 0, 99, MPI_COMM_WORLD);
                 // printf("Trabalhador %d mandou o rótulo da instância %d.\n", rank, i);
             }
