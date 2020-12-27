@@ -1,3 +1,4 @@
 *.txt
 kmeans-thread
 kmeans-seq
+kmeans-mpi
