@@ -440,7 +440,8 @@ int main(int argc, char **argv) {
 
         }
 
-        printf("Iteração: %d; Delta: %lf\n", iter, mean_deltas);
+        if (rank == 0)
+            printf("Iteração: %d; Delta: %lf\n", iter, mean_deltas);
 
     } while(iter < MAX_ITER && mean_deltas > TOL);
 
