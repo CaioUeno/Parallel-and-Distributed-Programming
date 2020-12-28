@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include "mpi.h"
 
 // Define a condição de parada do algoritmo
@@ -276,6 +278,15 @@ int main(int argc, char **argv) {
         select_centroids(&km);
     }
 
+    // variáveis para medida do tempo
+	struct timeval inic, fim;
+    struct rusage r1, r2;
+
+    // obtém tempo e consumo de CPU antes da aplicação do filtro
+	gettimeofday(&inic, 0);
+    getrusage(RUSAGE_SELF, &r1);
+
+
     do {
         iter++;
 
@@ -444,6 +455,16 @@ int main(int argc, char **argv) {
             printf("Iteração: %d; Delta: %lf\n", iter, mean_deltas);
 
     } while(iter < MAX_ITER && mean_deltas > TOL);
+
+     // obtém tempo e consumo de CPU depois da aplicação do filtro
+	gettimeofday(&fim,0);
+	getrusage(RUSAGE_SELF, &r2);
+
+	printf("\nElapsed time:%f sec\tUser time:%f sec\tSystem time:%f sec\n",
+	 (fim.tv_sec+fim.tv_usec/1000000.) - (inic.tv_sec+inic.tv_usec/1000000.),
+	 (r2.ru_utime.tv_sec+r2.ru_utime.tv_usec/1000000.) - (r1.ru_utime.tv_sec+r1.ru_utime.tv_usec/1000000.),
+	 (r2.ru_stime.tv_sec+r2.ru_stime.tv_usec/1000000.) - (r1.ru_stime.tv_sec+r1.ru_stime.tv_usec/1000000.));
+
 
     if(rank == 0){
 

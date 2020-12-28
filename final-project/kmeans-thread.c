@@ -3,17 +3,19 @@
 #include <math.h>
 #include <pthread.h>
 #include <time.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 // Número de threads a serem utilizadas
 #define N_THREADS 4
 
 // Define a condição de parada do algoritmo
-#define MAX_ITER 10
+#define MAX_ITER 500
 #define TOL 0.0001
 
 // Define as quantidades de instâncias, características e grupos
-#define N_INSTANCES 100
-#define N_FEATURES 2
+#define N_INSTANCES 20000
+#define N_FEATURES 500
 #define N_CLUSTERS 7
 
 // Tipo de dado: k_means
@@ -50,7 +52,7 @@ void create_artificial_dataset(k_means *km){
 
         // Atribuindo valores as features.
         for (int f = 0; f < km->n_features; f++)
-            km->instances[i][f] = sin(f+rand()%10)*cos(i+rand()%6)*(i+2)*pow(-1,rand()%2);
+            km->instances[i][f] = i; //sin(f+rand()%10)*cos(i+rand()%6)*(i+2)*pow(-1,rand()%2);
     }
 
     // Alocando um vetor que contém os rótulos para cada istância.
@@ -350,6 +352,15 @@ int main(int argc, char const *argv[]) {
     int iter = 0;
     double mean_deltas;
 
+    // variáveis para medida do tempo
+	struct timeval inic, fim;
+    struct rusage r1, r2;
+
+    // obtém tempo e consumo de CPU antes da aplicação do filtro
+	gettimeofday(&inic, 0);
+    getrusage(RUSAGE_SELF, &r1);
+
+
     do {
         iter++;
         label_instances(&km);
@@ -362,6 +373,16 @@ int main(int argc, char const *argv[]) {
         printf("Iteração: %d; Delta: %lf\n", iter, mean_deltas);
 
     } while(iter < MAX_ITER && mean_deltas > TOL);
+
+     // obtém tempo e consumo de CPU depois da aplicação do filtro
+	gettimeofday(&fim,0);
+	getrusage(RUSAGE_SELF, &r2);
+
+	printf("\nElapsed time:%f sec\tUser time:%f sec\tSystem time:%f sec\n",
+	 (fim.tv_sec+fim.tv_usec/1000000.) - (inic.tv_sec+inic.tv_usec/1000000.),
+	 (r2.ru_utime.tv_sec+r2.ru_utime.tv_usec/1000000.) - (r1.ru_utime.tv_sec+r1.ru_utime.tv_usec/1000000.),
+	 (r2.ru_stime.tv_sec+r2.ru_stime.tv_usec/1000000.) - (r1.ru_stime.tv_sec+r1.ru_stime.tv_usec/1000000.));
+
 
     save_instances(&km);
     save_centroids(&km);
