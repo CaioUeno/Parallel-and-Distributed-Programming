@@ -2,18 +2,17 @@
 #include <stdlib.h>
 #include <math.h>
 #include <pthread.h>
-#include <time.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 
-// Número de threads a serem utilizadas
+// Número de threads a serem utilizadas.
 #define N_THREADS 4
 
-// Define a condição de parada do algoritmo
+// Define as condições de parada do algoritmo.
 #define MAX_ITER 500
 #define TOL 0.0001
 
-// Define as quantidades de instâncias, características e grupos
+// Define as quantidades de instâncias, características e grupos.
 #define N_INSTANCES 20000
 #define N_FEATURES 500
 #define N_CLUSTERS 7
@@ -27,37 +26,33 @@ typedef struct{
 } k_means;
 
 // Tipo de dado: argumentos
-typedef struct {
+typedef struct{
     k_means *k_m;
     int begin_offset, end_offset;
 } arguments;
 
 //------------------------------------------------------------------------------
 
-void create_artificial_dataset(k_means *km){
+void create_artificial_k_means(k_means *km){
 
     /*
         Função que cria um dataset artificial.
     */
 
-    srand(time(NULL));
-
-    // Instanciando a matriz de instâncias.
+    // Aloca a matriz de instâncias.
     km->instances = (double **) malloc(km->n_instances*sizeof(double));
 
+    // Aloca dinamicamente as instâncias.
     for(int i = 0; i < km->n_instances; i++){
-
-        // Alocando dinamicamente uma instância.
         km->instances[i] = (double *) malloc(km->n_features*sizeof(double));
 
-        // Atribuindo valores as features.
+        // Atribui valores às features.
         for (int f = 0; f < km->n_features; f++)
-            km->instances[i][f] = i; //sin(f+rand()%10)*cos(i+rand()%6)*(i+2)*pow(-1,rand()%2);
+            km->instances[i][f] = i; //sin(f+rand()%10)*cos(i+rand()%6)*(i+2)*pow(-1,rand()%2); Versão aleatória.
     }
 
-    // Alocando um vetor que contém os rótulos para cada istância.
+    // Aloca dinamicamente o vetor de rótulos.
     km->labels = (int *) malloc(km->n_instances*sizeof(int));
-
 }
 
 //------------------------------------------------------------------------------
@@ -68,76 +63,83 @@ void select_centroids(k_means *km){
         Função que seleciona os centroides da primeira iteração.
     */
 
-    // Instanciando a matriz de centroides.
+    // Aloca a matriz de centroides.
     km->centroids = (double **) malloc(km->n_clusters*sizeof(double));
 
+    // Aloca dinamicamente os centroides.
     for(int c = 0; c < km->n_clusters; c++){
-
-        // Alocando dinamicamente um centroide.
         km->centroids[c] = (double *) malloc(km->n_features*sizeof(double));
 
-        // Atribuindo valores para cada dimensão.
+        // Atribui valores às features.
         for (int f = 0; f < km->n_features; f++)
             km->centroids[c][f] = km->instances[c][f];
     }
 
+    // Aloca dinamicamente o vetor de deslocamentos dos centroides.
     km->displacement = (double *) calloc(km->n_clusters, sizeof(double));
 }
 
 void *nearest_centroid_id(arguments *arg){
 
     /*
-        Função que calcula qual o índice do cluster mais próximo
+        Função que calcula qual o rótulo do centroide mais próximo
         para cada instância dentro do intervalo dado pela struct arg.
     */
 
     int min_index;
     double current_dist, min_dist;
 
-    // Iterando entre as instâncias.
-    for (int i = arg->begin_offset; i <= arg->end_offset; i++) {
-
-        // Calculando a distância para cada cluster c.
+    // Itera entre as instâncias do intervalo.
+    for (int i = arg->begin_offset; i <= arg->end_offset; i++){
         for (int c = 0; c < arg->k_m->n_clusters; c++){
-
             current_dist = 0;
+
+            // Calcula a distância euclidiana entre a instância e o centroide corrente.
             for (int f = 0; f < arg->k_m->n_features; f++)
                 current_dist += pow((arg->k_m->centroids[c][f] - arg->k_m->instances[i][f]), 2);
             current_dist = sqrt(current_dist);
 
+            // Atribui como distância mínima, caso seja a primeira iteração.
             if(c == 0){
                 min_dist = current_dist;
                 min_index = c;
             }
 
+            // Atualiza a distância mínima.
             if(current_dist < min_dist){
                 min_dist = current_dist;
                 min_index = c;
             }
         }
 
-        // Atribuindo o rótulo do cluster mais perto.
+        // Atribui o rótulo do centroide mais próximo.
         arg->k_m->labels[i] = min_index;
     }
 }
 
 void label_instances(k_means *km){
 
+    /*
+        Função que paraleliza a rotulação das instâncias, utilizando
+        a struct arguments para a divisão dos dados.
+    */
+
     pthread_t threads[N_THREADS];
     arguments args[N_THREADS];
     int r;
     double a = km->n_instances / (float) N_THREADS;
 
-    for (int t = 0; t < N_THREADS; t++) {
+    for (int t = 0; t < N_THREADS; t++){
 
+        // Define as variáveis da struct para passagem de parâmetros.
         args[t].k_m = km;
         args[t].begin_offset = ceil(a * t);
         args[t].end_offset = ceil(a * (t + 1)) - 1;
 
-        // Criando as threads.
+        // Cria as threads.
         r = pthread_create(&threads[t], NULL, &nearest_centroid_id, &args[t]);
 
-        if (r != 0) {
+        if (r != 0){
             printf("Erro para criar uma thread (label_instances function)\n");
             exit(0);
         }
@@ -146,34 +148,51 @@ void label_instances(k_means *km){
     // Espera todas as threads terminarem sua execução.
     for(int t = 0; t < N_THREADS; t++)
         pthread_join(threads[t], NULL);
-
 }
 
 void *update_centroid(arguments *arg){
 
-    int counter;
-    double aux, current_delta;
+    /*
+        Função que atualiza os centroides dentro do intervalo dado pela struct arg.
+    */
 
+    int counter;
+    double feature_sum, current_delta;
+
+    // Itera entre os centroides do intervalo.
     for(int c = arg->begin_offset; c <= arg->end_offset; c++){
         current_delta = 0;
+
         for (int f = 0; f < arg->k_m->n_features; f++){
             counter = 0;
-            aux = 0;
-            for (int i = 0; i < arg->k_m->n_instances; i++){
+            feature_sum = 0;
+
+            // Soma a feature corrente de todas as instâncias que pertencem ao centroide corrente e as conta.
+            for (int i = 0; i < arg->k_m->n_instances; i++)
                 if(arg->k_m->labels[i] == c){
                     counter++;
-                    aux += arg->k_m->instances[i][f];
+                    feature_sum += arg->k_m->instances[i][f];
                 }
-            }
-            current_delta += pow(arg->k_m->centroids[c][f] - aux/counter, 2);
-            arg->k_m->centroids[c][f] = aux/counter;
+
+            // Calcula o deslocamento dinamicamente (ao longo das iterações).
+            current_delta += pow(arg->k_m->centroids[c][f] - feature_sum/counter, 2);
+
+            // Atualiza a feature (dimensão) corrente do centroide corrente.
+            arg->k_m->centroids[c][f] = feature_sum/counter;
         }
+
+        // Finaliza o cálculo da distância euclidiana entre o centroide antigo e atualizado.
         arg->k_m->displacement[c] += sqrt(current_delta);
     }
-
 }
 
 double update_centroids(k_means *km){
+
+    /*
+        Função que paraleliza a atualização dos centroides, utilizando
+        a struct arguments para a divisão dos dados.
+        Retorna a média dos deslocamentos.
+    */
 
     int counter, r;
     double sum_deltas = 0;
@@ -182,31 +201,33 @@ double update_centroids(k_means *km){
     pthread_t threads[N_THREADS];
     arguments args[N_THREADS];
 
-    // Zerando vetor de deslocamentos para nova iteração
+    // Zera o vetor de deslocamentos para nova iteração.
     for (int c = 0; c < km->n_clusters; c++)
         km->displacement[c] = 0;
 
-    for (int t = 0; t < N_THREADS; t++) {
+    for (int t = 0; t < N_THREADS; t++){
 
+        // Define as variáveis da struct para passagem de parâmetros.
         args[t].k_m = km;
         args[t].begin_offset = ceil(a * t);
         args[t].end_offset = ceil(a * (t + 1)) - 1;
 
-        // Criando as threads.
+        // Cria as threads.
         r = pthread_create(&threads[t], NULL, &update_centroid, &args[t]);
 
-        if (r != 0) {
+        if (r != 0){
             printf("Erro para criar uma thread (update_centroids function)\n");
             exit(0);
         }
     }
 
+    // Espera todas as threads terminarem sua execução.
     for (int t = 0; t < N_THREADS; t++)
         pthread_join(threads[t], NULL);
 
+    // Soma os deslocamentos de cada centroide.
     for (int c = 0; c < km->n_clusters; c++)
         sum_deltas += km->displacement[c];
-
 
     return sum_deltas/km->n_clusters;
 }
@@ -220,11 +241,14 @@ void print_instances(k_means *km){
     */
 
     printf("Instâncias: \n");
-    for (int i = 0; i < km->n_instances; i++) {
+
+    for (int i = 0; i < km->n_instances; i++){
         for (int f = 0; f < km->n_features; f++)
             printf("%lf ", km->instances[i][f]);
+
         printf("\n");
     }
+
     printf("\n");
 }
 
@@ -235,11 +259,14 @@ void print_centroids(k_means *km){
     */
 
     printf("Centroides: \n");
-    for (int c = 0; c < km->n_clusters; c++) {
+
+    for (int c = 0; c < km->n_clusters; c++){
         for (int f = 0; f < km->n_features; f++)
             printf("%lf ", km->centroids[c][f]);
+
         printf("\n");
     }
+
     printf("\n");
 }
 
@@ -250,6 +277,7 @@ void print_labels(k_means *km){
     */
 
     printf("Rótulos: \n");
+
     for (int i = 0; i < km->n_instances; i++)
         printf("%d \n", km->labels[i]);
 
@@ -268,11 +296,13 @@ void save_instances(k_means *km){
 
     arq = fopen("instances.txt", "w");
 
-    for (int i = 0; i < km->n_instances; i++) {
+    for (int i = 0; i < km->n_instances; i++){
         for (int f = 0; f < km->n_features; f++)
             fprintf(arq, "%lf ", km->instances[i][f]);
+
         fprintf(arq, "\n");
     }
+
     fclose(arq);
 }
 
@@ -286,9 +316,10 @@ void save_centroids(k_means *km){
 
     arq = fopen("centroides.txt", "w");
 
-    for (int c = 0; c < km->n_clusters; c++) {
+    for (int c = 0; c < km->n_clusters; c++){
         for (int f = 0; f < km->n_features; f++)
             fprintf(arq, "%lf ", km->centroids[c][f]);
+
         fprintf(arq, "\n");
     }
 
@@ -300,10 +331,14 @@ void save_labels(k_means *km){
     /*
         Função que salve os rótulos.
     */
+
     FILE *arq;
+
     arq = fopen("labels.txt", "w");
+
     for (int i = 0; i < km->n_instances; i++)
         fprintf(arq, "%d\n", km->labels[i]);
+
     fclose(arq);
 }
 
@@ -312,7 +347,7 @@ void save_labels(k_means *km){
 void free_k_means(k_means *km){
 
     /*
-        Função que desaloca as variáveis dinâmicas.
+        Função que desaloca as váriaveis dinâmicas da struct k_means.
     */
 
     for(int i = 0; i < km->n_instances; i++){
@@ -337,44 +372,40 @@ void free_k_means(k_means *km){
 
 //------------------------------------------------------------------------------
 
-int main(int argc, char const *argv[]) {
+int main(int argc, char const *argv[]){
 
-    // Instanciando uma struct do tipo k_means e variáveis.
+    // Instancia uma struct do tipo k-means.
     k_means km;
     km.n_instances = N_INSTANCES;
     km.n_features = N_FEATURES;
     km.n_clusters = N_CLUSTERS;
 
-    create_artificial_dataset(&km);
-
+    create_artificial_k_means(&km);
     select_centroids(&km);
 
-    int iter = 0;
     double mean_deltas;
+    int iter = 0;
 
-    // variáveis para medida do tempo
+    // Variáveis para medida do tempo.
 	struct timeval inic, fim;
     struct rusage r1, r2;
 
-    // obtém tempo e consumo de CPU antes da aplicação do filtro
+    // Obtém tempo e consumo de CPU antes de executar o algoritmo k-means (utilizando threads).
 	gettimeofday(&inic, 0);
     getrusage(RUSAGE_SELF, &r1);
 
-
-    do {
+    // Rotula as instâncias e atualiza os centroides até satisfazer uma das condições (MAX_ITER ou TOL).
+    do{
         iter++;
+
         label_instances(&km);
         mean_deltas = update_centroids(&km);
-
-        // Prints para depuração
-        // print_labels(&km);
-        // print_centroids(&km);
 
         printf("Iteração: %d; Delta: %lf\n", iter, mean_deltas);
 
     } while(iter < MAX_ITER && mean_deltas > TOL);
 
-     // obtém tempo e consumo de CPU depois da aplicação do filtro
+    // Obtém tempo e consumo de CPU após executar o algoritmo k-means (utilizando threads).
 	gettimeofday(&fim,0);
 	getrusage(RUSAGE_SELF, &r2);
 
@@ -383,11 +414,16 @@ int main(int argc, char const *argv[]) {
 	 (r2.ru_utime.tv_sec+r2.ru_utime.tv_usec/1000000.) - (r1.ru_utime.tv_sec+r1.ru_utime.tv_usec/1000000.),
 	 (r2.ru_stime.tv_sec+r2.ru_stime.tv_usec/1000000.) - (r1.ru_stime.tv_sec+r1.ru_stime.tv_usec/1000000.));
 
+     // Prints para a depuração
+     // print_labels(&km);
+     // print_centroids(&km);
 
+     // Armazena os resultados em arquivo (.txt).
     save_instances(&km);
     save_centroids(&km);
     save_labels(&km);
 
     free_k_means(&km);
+
     return 0;
 }

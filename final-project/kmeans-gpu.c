@@ -6,11 +6,11 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
-// Define a condição de parada do algoritmo
+// Define as condições de parada do algoritmo.
 #define MAX_ITER 500
 #define TOL 0.0001
 
-// Define as quantidades de instâncias, características e grupos
+// Define as quantidades de instâncias, características e grupos.
 #define N_INSTANCES 20000
 #define N_FEATURES 500
 #define N_CLUSTERS 7
@@ -34,16 +34,18 @@ void create_artificial_k_means(k_means *km){
         Versão 1D.
     */
 
-    // Instanciando a matriz(vetor) de instâncias.
+    // Aloca a matriz (como um vetor) de instâncias.
     km->instances = (double *) malloc(km->n_instances*km->n_features*sizeof(double));
 
+    // Aloca dinamicamente as instâncias.
     for(int i = 0; i < km->n_instances; i++){
 
-        // Atribuindo valores as features
+        // Atribui valores às features.
         for (int f = 0; f < km->n_features; f++)
-            km->instances[i*km->n_features + f] = i; //sin(f+rand()%10)*cos(i+rand()%6)*(i+2)*pow(-1,rand()%2);
+            km->instances[i*km->n_features + f] = i; //sin(f+rand()%10)*cos(i+rand()%6)*(i+2)*pow(-1,rand()%2); Versão aleatória.
     }
 
+    // Aloca dinamicamente o vetor de rótulos.
     km->labels = (int *) malloc(km->n_instances*sizeof(int));
 }
 
@@ -56,38 +58,47 @@ void select_centroids(k_means *km){
         Versão 1D.
     */
 
-    // Instanciando a matriz de centroides.
+    // Aloca dinamicamente a matriz (como um vetor) de centroides.
     km->centroids = (double *) malloc(km->n_clusters*km->n_features*sizeof(double));
 
+    // Atribui valores às features.
     for(int c = 0; c < km->n_clusters; c++)
-
-        // Atribuindo valores as features
         for (int f = 0; f < km->n_features; f++)
             km->centroids[c*km->n_features + f] = km->instances[c*km->n_features + f];
 
+    // Aloca dinamicamente o vetor de deslocamentos dos centroides.
     km->displacement = (double *) calloc(km->n_clusters, sizeof(double));
 }
 
 __global__
-void label_instances(double *inst, double *cent, int *labs) {
+void label_instances(double *inst, double *cent, int *labs){
 
+    /*
+        Função (somente na GPU) que atribui a cada instância o rótulo do centroide mais próximo.
+    */
+
+    // Define qual instância será calculada.
     int i = blockIdx.x*blockDim.x+threadIdx.x;
 
     double current_dist, min_dist;
 
+    // Verifica se está no escopo de instâncias.
     if (i < N_INSTANCES){
         for (int c = 0; c < N_CLUSTERS; c++){
-
             current_dist = 0;
+
+            // Calcula a distância euclidiana entre a instância e o centroide corrente.
             for (int f = 0; f < N_FEATURES; f++)
                 current_dist += pow((cent[c*N_FEATURES+f] - inst[i*N_FEATURES+f]), 2);
             current_dist = sqrt(current_dist);
 
+            // Atribui como distância mínima, caso seja a primeira iteração.
             if(c == 0){
                 min_dist = current_dist;
                 labs[i] = c;
             }
 
+            // Atualiza a distância mínima.
             if(current_dist < min_dist){
                 min_dist = current_dist;
                 labs[i] = c;
@@ -97,29 +108,42 @@ void label_instances(double *inst, double *cent, int *labs) {
 }
 
 __global__
-void update_centroids(double *inst, double *cent, int *labs, double *disp) {
+void update_centroids(double *inst, double *cent, int *labs, double *disp){
 
+    /*
+        Função (somente na GPu) que atualiza cada centroide.
+    */
+
+    // Define qual centroide será calculado.
     int c = blockIdx.x*blockDim.x+threadIdx.x;
 
-    if (c < N_CLUSTERS) {
+    // Verifica se está no escopo de centroides.
+    if (c < N_CLUSTERS){
         int counter;
-        double aux, current_delta, mean_deltas = 0;
+        double feature_sum, current_delta = 0, mean_deltas = 0;
 
-        current_delta = 0;
         for (int f = 0; f < N_FEATURES; f++){
             counter = 0;
-            aux = 0;
-            for (int i = 0; i < N_INSTANCES; i++){
+            feature_sum = 0;
+
+            // Soma a feature corrente de todas as instâncias que pertencem ao centroide corrente e as conta.
+            for (int i = 0; i < N_INSTANCES; i++)
                 if(labs[i] == c){
                     counter++;
-                    aux += inst[i*N_FEATURES + f];
+                    feature_sum += inst[i*N_FEATURES + f];
                 }
-            }
-            current_delta += pow(cent[c*N_FEATURES + f] - aux/counter, 2);
-            cent[c*N_FEATURES + f] = aux/counter;
+
+            // Calcula o deslocamento dinamicamente (ao longo das iterações).
+            current_delta += pow(cent[c*N_FEATURES + f] - feature_sum/counter, 2);
+
+            // Atualiza a feature (dimensão) corrente do centroide corrente.
+            cent[c*N_FEATURES + f] = feature_sum/counter;
         }
+
+        // Finaliza o cálculo da distância euclidiana entre o centroide antigo e atualizado.
         mean_deltas += sqrt(current_delta);
 
+        // Armazena o deslocamento no vetor disp.
         disp[c] = mean_deltas/N_CLUSTERS;
     }
 }
@@ -133,11 +157,14 @@ void print_instances(k_means *km){
     */
 
     printf("Instâncias: \n");
-    for (int i = 0; i < km->n_instances*km->n_features; i++) {
+
+    for (int i = 0; i < km->n_instances*km->n_features; i++){
         if (i % km->n_features == 0)
             printf("\n");
+
         printf("%lf ", km->instances[i]);
     }
+
     printf("\n");
 }
 
@@ -148,18 +175,15 @@ void print_centroids(k_means *km){
         Versão 1D.
     */
 
-    if (km->n_clusters == 0) {
-        printf("É necessário definir os clusters antes de printá-los!\n");
-        exit(0);
-    }
-
     printf("Centroides: \n");
-    for (int c = 0; c < km->n_clusters*km->n_features; c++) {
+
+    for (int c = 0; c < km->n_clusters*km->n_features; c++){
         if (c % km->n_features == 0)
             printf("\n");
-        printf("%lf ", km->centroids[c]);
 
+        printf("%lf ", km->centroids[c]);
     }
+
     printf("\n");
 }
 
@@ -170,6 +194,7 @@ void print_labels(k_means *km){
     */
 
     printf("Rótulos: \n");
+
     for (int i = 0; i < km->n_instances; i++)
         printf("%d \n", km->labels[i]);
 
@@ -188,11 +213,13 @@ void save_instances(k_means *km){
 
     arq = fopen("instances.txt", "w");
 
-    for (int i = 0; i < km->n_instances*km->n_features; i++) {
+    for (int i = 0; i < km->n_instances*km->n_features; i++){
         if(i % km->n_features == 0 && i != 0)
             fprintf(arq, "\n");
+
         fprintf(arq, "%lf ", km->instances[i]);
     }
+
     fclose(arq);
 }
 
@@ -206,9 +233,10 @@ void save_centroids(k_means *km){
 
     arq = fopen("centroides.txt", "w");
 
-    for (int c = 0; c < km->n_clusters*km->n_features; c++) {
+    for (int c = 0; c < km->n_clusters*km->n_features; c++){
         if(c % km->n_features == 0 && c != 0)
             fprintf(arq, "\n");
+
         fprintf(arq, "%lf ", km->centroids[c]);
     }
 
@@ -220,10 +248,14 @@ void save_labels(k_means *km){
     /*
         Função que salve os rótulos.
     */
+
     FILE *arq;
+
     arq = fopen("labels.txt", "w");
+
     for (int i = 0; i < km->n_instances; i++)
         fprintf(arq, "%d\n", km->labels[i]);
+
     fclose(arq);
 }
 
@@ -232,7 +264,7 @@ void save_labels(k_means *km){
 void free_k_means(k_means *km){
 
     /*
-        Função que desaloca o vetor de structs.
+        Função que desaloca as váriaveis dinâmicas da struct k_means.
     */
 
     free(km->instances);
@@ -248,83 +280,84 @@ void free_k_means(k_means *km){
 //------------------------------------------------------------------------------
 
 
-int main(int argc, char const *argv[]) {
+int main(int argc, char const *argv[]){
 
+    // Instancia uma struct do tipo k-means.
     k_means km;
     km.n_instances = N_INSTANCES;
     km.n_features = N_FEATURES;
     km.n_clusters = N_CLUSTERS;
 
-    double mean_deltas;
-    int iter = 0;
-
     create_artificial_k_means(&km);
     select_centroids(&km);
 
-    // Variáveis para medida do tempo
+    double mean_deltas;
+    int iter = 0;
+
+    // Variáveis para medida do tempo.
 	struct timeval inic, fim;
     struct rusage r1, r2;
 
-    // Obtém tempo e consumo de CPU antes da aplicação do filtro
+    // Obtém tempo e consumo de CPU antes de executar o algoritmo k-means.
 	gettimeofday(&inic, 0);
     getrusage(RUSAGE_SELF, &r1);
 
-    // Variáveis para GPU
+    // Variáveis para GPU.
     double *gpu_instances, *gpu_centroids, *gpu_displacement;
     int *gpu_labels;
     int n_threads, n_blocks;
+    dim3 threadsPerBlock, blocksPerGrid;
 
-    // Alocação de memória na GPU
+    // Alocação de memória na GPU.
     cudaMalloc(&gpu_instances, km.n_instances*km.n_features*sizeof(double));
     cudaMalloc(&gpu_centroids, km.n_clusters*km.n_features*sizeof(double));
     cudaMalloc(&gpu_labels, km.n_instances*sizeof(int));
     cudaMalloc(&gpu_displacement, km.n_clusters*sizeof(double));
 
-    // Cópia dos dados da memória RAM para a memória do dispositivo
+    // Cópia dos dados da memória RAM para a memória do dispositivo.
     cudaMemcpy(gpu_instances, km.instances, km.n_instances*km.n_features*sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(gpu_centroids, km.centroids, km.n_clusters*km.n_features*sizeof(double), cudaMemcpyHostToDevice);
 
-    do {
+    // Rotula as instâncias e atualiza os centroides até satisfazer uma das condições (MAX_ITER ou TOL).
+    do{
         iter++;
 
-        // Paralelização 1: Definição do rótulo das instâncias
+        // Paralelização 1: Definição do rótulo das instâncias.
         if(km.n_instances <= 512)
             n_threads = km.n_instances;
         else
             n_threads = 512;
-
-        dim3 threadsPerBlock(n_threads);
+        threadsPerBlock = n_threads;
 
         n_blocks = ceil(km.n_instances/(float) n_threads);
+        blocksPerGrid = n_blocks;
 
-        dim3 blocksPerGrid(n_blocks);
         label_instances<<<blocksPerGrid, threadsPerBlock>>>(gpu_instances, gpu_centroids, gpu_labels);
 
-        // Paralelização 2: Atualização dos centroides
+        // Paralelização 2: Atualização dos centroides.
         if(km.n_clusters <= 512)
             n_threads = km.n_clusters;
         else
             n_threads = 512;
-
         threadsPerBlock = n_threads;
 
         n_blocks = ceil(km.n_clusters/(float) n_threads);
-
         blocksPerGrid = n_blocks;
 
         update_centroids<<<blocksPerGrid, threadsPerBlock>>>(gpu_instances, gpu_centroids, gpu_labels, gpu_displacement);
+
         cudaMemcpy(km.displacement, gpu_displacement, km.n_clusters*sizeof(double), cudaMemcpyDeviceToHost);
 
+        // Calcula a média dos deslocamentos (em CPU).
         for (int c = 0; c < km.n_clusters; c++)
             mean_deltas += km.displacement[c];
-
         mean_deltas /= km.n_clusters;
 
         printf("Iteração: %d; Delta: %lf\n", iter, mean_deltas);
 
     } while(iter < MAX_ITER && mean_deltas > TOL);
 
-    // obtém tempo e consumo de CPU depois da aplicação do filtro
+    // Obtém tempo e consumo de CPU após executar o algoritmo k-means (utilizando GPU).
 	gettimeofday(&fim,0);
 	getrusage(RUSAGE_SELF, &r2);
 
@@ -333,7 +366,7 @@ int main(int argc, char const *argv[]) {
 	 (r2.ru_utime.tv_sec+r2.ru_utime.tv_usec/1000000.) - (r1.ru_utime.tv_sec+r1.ru_utime.tv_usec/1000000.),
 	 (r2.ru_stime.tv_sec+r2.ru_stime.tv_usec/1000000.) - (r1.ru_stime.tv_sec+r1.ru_stime.tv_usec/1000000.));
 
-    // Cópia dos dados da memória da GPU para a memória RAM
+    // Cópia dos dados da memória da GPU para a memória RAM.
     cudaMemcpy(km.instances, gpu_instances, km.n_instances*km.n_features*sizeof(double), cudaMemcpyDeviceToHost);
     cudaMemcpy(km.centroids, gpu_centroids, km.n_clusters*km.n_features*sizeof(double), cudaMemcpyDeviceToHost);
     cudaMemcpy(km.labels, gpu_labels, km.n_instances*sizeof(int), cudaMemcpyDeviceToHost);
@@ -342,11 +375,13 @@ int main(int argc, char const *argv[]) {
     // print_labels(&km);
     // print_centroids(&km);
 
+    // Armazena os resultados em arquivo (.txt).
     save_instances(&km);
     save_centroids(&km);
     save_labels(&km);
 
     free_k_means(&km);
+
     cudaFree(gpu_instances);
     cudaFree(gpu_centroids);
     cudaFree(gpu_displacement);
