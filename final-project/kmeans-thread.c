@@ -58,21 +58,6 @@ void create_artificial_dataset(k_means *km){
 
 }
 
-void print_instances(k_means *km){
-
-    /*
-        Função que imprime as instâncias.
-    */
-
-    printf("Instâncias: \n");
-    for (int i = 0; i < km->n_instances; i++) {
-        for (int f = 0; f < km->n_features; f++)
-            printf("%lf ", km->instances[i][f]);
-        printf("\n");
-    }
-    printf("\n");
-}
-
 //------------------------------------------------------------------------------
 
 void select_centroids(k_means *km){
@@ -97,6 +82,150 @@ void select_centroids(k_means *km){
     km->displacement = (double *) calloc(km->n_clusters, sizeof(double));
 }
 
+void *nearest_centroid_id(arguments *arg){
+
+    /*
+        Função que calcula qual o índice do cluster mais próximo
+        para cada instância dentro do intervalo dado pela struct arg.
+    */
+
+    int min_index;
+    double current_dist, min_dist;
+
+    // Iterando entre as instâncias.
+    for (int i = arg->begin_offset; i <= arg->end_offset; i++) {
+
+        // Calculando a distância para cada cluster c.
+        for (int c = 0; c < arg->k_m->n_clusters; c++){
+
+            current_dist = 0;
+            for (int f = 0; f < arg->k_m->n_features; f++)
+                current_dist += pow((arg->k_m->centroids[c][f] - arg->k_m->instances[i][f]), 2);
+            current_dist = sqrt(current_dist);
+
+            if(c == 0){
+                min_dist = current_dist;
+                min_index = c;
+            }
+
+            if(current_dist < min_dist){
+                min_dist = current_dist;
+                min_index = c;
+            }
+        }
+
+        // Atribuindo o rótulo do cluster mais perto.
+        arg->k_m->labels[i] = min_index;
+    }
+}
+
+void label_instances(k_means *km){
+
+    pthread_t threads[N_THREADS];
+    arguments args[N_THREADS];
+    int r;
+    double a = km->n_instances / (float) N_THREADS;
+
+    for (int t = 0; t < N_THREADS; t++) {
+
+        args[t].k_m = km;
+        args[t].begin_offset = ceil(a * t);
+        args[t].end_offset = ceil(a * (t + 1)) - 1;
+
+        // Criando as threads.
+        r = pthread_create(&threads[t], NULL, &nearest_centroid_id, &args[t]);
+
+        if (r != 0) {
+            printf("Erro para criar uma thread (label_instances function)\n");
+            exit(0);
+        }
+    }
+
+    // Espera todas as threads terminarem sua execução.
+    for(int t = 0; t < N_THREADS; t++)
+        pthread_join(threads[t], NULL);
+
+}
+
+void *update_centroid(arguments *arg){
+
+    int counter;
+    double aux, current_delta;
+
+    for(int c = arg->begin_offset; c <= arg->end_offset; c++){
+        current_delta = 0;
+        for (int f = 0; f < arg->k_m->n_features; f++){
+            counter = 0;
+            aux = 0;
+            for (int i = 0; i < arg->k_m->n_instances; i++){
+                if(arg->k_m->labels[i] == c){
+                    counter++;
+                    aux += arg->k_m->instances[i][f];
+                }
+            }
+            current_delta += pow(arg->k_m->centroids[c][f] - aux/counter, 2);
+            arg->k_m->centroids[c][f] = aux/counter;
+        }
+        arg->k_m->displacement[c] += sqrt(current_delta);
+    }
+
+}
+
+double update_centroids(k_means *km){
+
+    int counter, r;
+    double sum_deltas = 0;
+    double a = km->n_clusters / (float) N_THREADS;
+
+    pthread_t threads[N_THREADS];
+    arguments args[N_THREADS];
+
+    // Zerando vetor de deslocamentos para nova iteração
+    for (int c = 0; c < km->n_clusters; c++)
+        km->displacement[c] = 0;
+
+    for (int t = 0; t < N_THREADS; t++) {
+
+        args[t].k_m = km;
+        args[t].begin_offset = ceil(a * t);
+        args[t].end_offset = ceil(a * (t + 1)) - 1;
+
+        // Criando as threads.
+        r = pthread_create(&threads[t], NULL, &update_centroid, &args[t]);
+
+        if (r != 0) {
+            printf("Erro para criar uma thread (update_centroids function)\n");
+            exit(0);
+        }
+    }
+
+    for (int t = 0; t < N_THREADS; t++)
+        pthread_join(threads[t], NULL);
+
+    for (int c = 0; c < km->n_clusters; c++)
+        sum_deltas += km->displacement[c];
+
+
+    return sum_deltas/km->n_clusters;
+}
+
+//------------------------------------------------------------------------------
+
+void print_instances(k_means *km){
+
+    /*
+        Função que imprime as instâncias.
+    */
+
+    printf("Instâncias: \n");
+    for (int i = 0; i < km->n_instances; i++) {
+        for (int f = 0; f < km->n_features; f++)
+            printf("%lf ", km->instances[i][f]);
+        printf("\n");
+    }
+    printf("\n");
+}
+
 void print_centroids(k_means *km){
 
     /*
@@ -112,8 +241,6 @@ void print_centroids(k_means *km){
     printf("\n");
 }
 
-
-
 void print_labels(k_means *km){
 
     /*
@@ -127,6 +254,7 @@ void print_labels(k_means *km){
     printf("\n");
 }
 
+//------------------------------------------------------------------------------
 
 void save_instances(k_means *km){
 
@@ -203,136 +331,6 @@ void free_k_means(k_means *km){
     km->instances = NULL;
     km->centroids = NULL;
     km->labels = NULL;
-}
-
-//------------------------------------------------------------------------------
-
-void *nearest_centroid_id(arguments *arg){
-
-    /*
-        Função que calcula qual o índice do cluster mais próximo
-        para cada instância dentro do intervalo dado pela struct arg.
-    */
-
-    int min_index;
-    double current_dist, min_dist;
-
-    // Iterando entre as instâncias.
-    for (int i = arg->begin_offset; i <= arg->end_offset; i++) {
-
-        // Calculando a distância para cada cluster c.
-        for (int c = 0; c < arg->k_m->n_clusters; c++){
-
-            current_dist = 0;
-            for (int f = 0; f < arg->k_m->n_features; f++)
-                current_dist += pow((arg->k_m->centroids[c][f] - arg->k_m->instances[i][f]), 2);
-            current_dist = sqrt(current_dist);
-
-            if(c == 0){
-                min_dist = current_dist;
-                min_index = c;
-            }
-
-            if(current_dist < min_dist){
-                min_dist = current_dist;
-                min_index = c;
-            }
-        }
-
-        // Atribuindo o rótulo do cluster mais perto.
-        arg->k_m->labels[i] = min_index;
-    }
-}
-
-void label_instances(k_means *km){
-
-    pthread_t threads[N_THREADS];
-    arguments args[N_THREADS];
-    int r;
-    double a = km->n_instances / (float) N_THREADS;
-
-    for (int t = 0; t < N_THREADS; t++) {
-
-        args[t].k_m = km;
-        args[t].begin_offset = ceil(a * t);
-        args[t].end_offset = ceil(a * (t + 1)) - 1;
-
-        // Criando as threads.
-        r = pthread_create(&threads[t], NULL, &nearest_centroid_id, &args[t]);
-
-        if (r != 0) {
-            printf("Erro para criar uma thread (label_instances function)\n");
-            exit(0);
-        }
-    }
-
-    // Espera todas as threads terminarem sua execução.
-    for(int t = 0; t < N_THREADS; t++)
-        pthread_join(threads[t], NULL);
-
-}
-
-
-void *update_centroid(arguments *arg){
-
-    int counter;
-    double aux, current_delta;
-
-    for(int c = arg->begin_offset; c <= arg->end_offset; c++){
-        current_delta = 0;
-        for (int f = 0; f < arg->k_m->n_features; f++){
-            counter = 0;
-            aux = 0;
-            for (int i = 0; i < arg->k_m->n_instances; i++){
-                if(arg->k_m->labels[i] == c){
-                    counter++;
-                    aux += arg->k_m->instances[i][f];
-                }
-            }
-            current_delta += pow(arg->k_m->centroids[c][f] - aux/counter, 2);
-            arg->k_m->centroids[c][f] = aux/counter;
-        }
-        arg->k_m->displacement[c] += sqrt(current_delta);
-    }
-
-}
-
-double update_centroids(k_means *km){
-
-    int counter, r;
-    double sum_deltas = 0;
-    double a = km->n_clusters / (float) N_THREADS;
-
-    pthread_t threads[N_THREADS];
-    arguments args[N_THREADS];
-
-    // Zerando vetor de deslocamentos para nova iteração
-    for (int c = 0; c < km->n_clusters; c++)
-        km->displacement[c] = 0;
-
-    for (int t = 0; t < N_THREADS; t++) {
-
-        args[t].k_m = km;
-        args[t].begin_offset = ceil(a * t);
-        args[t].end_offset = ceil(a * (t + 1)) - 1;
-
-        // Criando as threads.
-        r = pthread_create(&threads[t], NULL, &update_centroid, &args[t]);
-
-        if (r != 0) {
-            printf("Erro para criar uma thread (update_centroids function)\n");
-            exit(0);
-        }
-    }
-
-    for (int t = 0; t < N_THREADS; t++)
-        pthread_join(threads[t], NULL);
-
-    for (int c = 0; c < km->n_clusters; c++)
-        sum_deltas += km->displacement[c];
-
-
-    return sum_deltas/km->n_clusters;
 }
 
 //------------------------------------------------------------------------------

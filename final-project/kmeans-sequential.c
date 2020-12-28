@@ -42,70 +42,6 @@ void create_artificial_k_means(k_means *km){
 
 }
 
-void print_instances(k_means *km){
-
-    /*
-        Função que imprime as instâncias.
-    */
-
-    printf("Instâncias: \n");
-    for (int i = 0; i < km->n_instances; i++) {
-        for (int f = 0; f < km->n_features; f++)
-            printf("%lf ", km->instances[i][f]);
-        printf("\n");
-    }
-    printf("\n");
-}
-
-void save_instances(k_means *km){
-
-    /*
-        Função que imprime as instâncias.
-    */
-
-    FILE *arq;
-
-    arq = fopen("instances.txt", "w");
-
-    for (int i = 0; i < km->n_instances; i++) {
-        for (int f = 0; f < km->n_features; f++)
-            fprintf(arq, "%lf ", km->instances[i][f]);
-        fprintf(arq, "\n");
-    }
-    fclose(arq);
-}
-
-void save_centroids(k_means *km){
-
-    /*
-        Função que salva os centroides.
-    */
-
-    FILE *arq;
-
-    arq = fopen("centroides.txt", "w");
-
-    for (int c = 0; c < km->n_clusters; c++) {
-        for (int f = 0; f < km->n_features; f++)
-            fprintf(arq, "%lf ", km->centroids[c][f]);
-        fprintf(arq, "\n");
-    }
-
-    fclose(arq);
-}
-
-void save_labels(k_means *km){
-
-    /*
-        Função que salve os rótulos.
-    */
-    FILE *arq;
-    arq = fopen("labels.txt", "w");
-    for (int i = 0; i < km->n_instances; i++)
-        fprintf(arq, "%d\n", km->labels[i]);
-    fclose(arq);
-}
-
 //------------------------------------------------------------------------------
 
 void select_centroids(k_means *km){
@@ -127,68 +63,6 @@ void select_centroids(k_means *km){
             km->centroids[c][f] = km->instances[c][f];
     }
 }
-
-void print_centroids(k_means *km){
-
-    /*
-        Função que imprime os centroides.
-    */
-
-    if (km->n_clusters == 0) {
-        printf("É necessário definir os clusters antes de printá-los!\n");
-        exit(0);
-    }
-
-    printf("Centroides: \n");
-    for (int c = 0; c < km->n_clusters; c++) {
-        for (int f = 0; f < km->n_features; f++)
-            printf("%lf ", km->centroids[c][f]);
-        printf("\n");
-    }
-    printf("\n");
-}
-
-void print_labels(k_means *km){
-
-    /*
-        Função que imprime os rótulos.
-    */
-
-    printf("Rótulos: \n");
-    for (int i = 0; i < km->n_instances; i++)
-        printf("%d \n", km->labels[i]);
-
-    printf("\n");
-}
-
-
-//------------------------------------------------------------------------------
-
-void free_k_means(k_means *km){
-
-    /*
-        Função que desaloca o vetor de structs.
-    */
-
-    for(int i = 0; i < km->n_instances; i++){
-        free(km->instances[i]);
-        km->instances[i] = NULL;
-    }
-
-    for(int i = 0; i < km->n_clusters; i++){
-        free(km->centroids[i]);
-        km->centroids[i] = NULL;
-    }
-
-    free(km->instances);
-    free(km->centroids);
-    free(km->labels);
-    km->instances = NULL;
-    km->centroids = NULL;
-    km->labels = NULL;
-}
-
-//------------------------------------------------------------------------------
 
 int nearest_centroid_id(k_means *km, int i){
 
@@ -245,6 +119,134 @@ double update_centroids(k_means *km){
         mean_deltas += sqrt(current_delta);
     }
     return mean_deltas/km->n_clusters;
+}
+
+//------------------------------------------------------------------------------
+
+void print_instances(k_means *km){
+
+    /*
+        Função que imprime as instâncias.
+    */
+
+    printf("Instâncias: \n");
+    for (int i = 0; i < km->n_instances; i++) {
+        for (int f = 0; f < km->n_features; f++)
+            printf("%lf ", km->instances[i][f]);
+        printf("\n");
+    }
+    printf("\n");
+}
+
+void print_centroids(k_means *km){
+
+    /*
+        Função que imprime os centroides.
+    */
+
+    if (km->n_clusters == 0) {
+        printf("É necessário definir os clusters antes de printá-los!\n");
+        exit(0);
+    }
+
+    printf("Centroides: \n");
+    for (int c = 0; c < km->n_clusters; c++) {
+        for (int f = 0; f < km->n_features; f++)
+            printf("%lf ", km->centroids[c][f]);
+        printf("\n");
+    }
+    printf("\n");
+}
+
+void print_labels(k_means *km){
+
+    /*
+        Função que imprime os rótulos.
+    */
+
+    printf("Rótulos: \n");
+    for (int i = 0; i < km->n_instances; i++)
+        printf("%d \n", km->labels[i]);
+
+    printf("\n");
+}
+
+//------------------------------------------------------------------------------
+
+void save_instances(k_means *km){
+
+    /*
+        Função que imprime as instâncias.
+    */
+
+    FILE *arq;
+
+    arq = fopen("instances.txt", "w");
+
+    for (int i = 0; i < km->n_instances; i++) {
+        for (int f = 0; f < km->n_features; f++)
+            fprintf(arq, "%lf ", km->instances[i][f]);
+        fprintf(arq, "\n");
+    }
+    fclose(arq);
+}
+
+void save_centroids(k_means *km){
+
+    /*
+        Função que salva os centroides.
+    */
+
+    FILE *arq;
+
+    arq = fopen("centroides.txt", "w");
+
+    for (int c = 0; c < km->n_clusters; c++) {
+        for (int f = 0; f < km->n_features; f++)
+            fprintf(arq, "%lf ", km->centroids[c][f]);
+        fprintf(arq, "\n");
+    }
+
+    fclose(arq);
+}
+
+void save_labels(k_means *km){
+
+    /*
+        Função que salve os rótulos.
+    */
+    FILE *arq;
+    arq = fopen("labels.txt", "w");
+    for (int i = 0; i < km->n_instances; i++)
+        fprintf(arq, "%d\n", km->labels[i]);
+    fclose(arq);
+}
+
+
+//------------------------------------------------------------------------------
+
+void free_k_means(k_means *km){
+
+    /*
+        Função que desaloca o vetor de structs.
+    */
+
+    for(int i = 0; i < km->n_instances; i++){
+        free(km->instances[i]);
+        km->instances[i] = NULL;
+    }
+
+    for(int i = 0; i < km->n_clusters; i++){
+        free(km->centroids[i]);
+        km->centroids[i] = NULL;
+    }
+
+    free(km->instances);
+    free(km->centroids);
+    free(km->labels);
+    km->instances = NULL;
+    km->centroids = NULL;
+    km->labels = NULL;
 }
 
 //------------------------------------------------------------------------------
