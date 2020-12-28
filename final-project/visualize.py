@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import numpy as np
+import random
 
 instances = open("instances.txt", "r")
 lines = [list(map(float, line.split())) for line in instances.readlines()]
@@ -9,7 +11,9 @@ labels = open("labels.txt", "r")
 labels = [list(map(int, line.split())) for line in labels.readlines()]
 labels = np.array(labels).ravel()
 
-color_map = {0:'r', 1:'g', 2:'b', 3:'y', 4:'k', 5:'crimson', 6:'mediumseagreen'}
+color_list = list(mcolors.CSS4_COLORS.keys())
+random.shuffle(color_list)
+color_map = {i:color for i, color in enumerate(color_list)}
 colors = [color_map[label] for label in labels]
 
 plt.scatter(lines[:, 0], lines[:, 1], color=colors)
