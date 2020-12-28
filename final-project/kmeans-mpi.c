@@ -6,12 +6,12 @@
 #include "mpi.h"
 
 // Define a condição de parada do algoritmo
-#define MAX_ITER 10
+#define MAX_ITER 500
 #define TOL 0.0001
 
 // Define as quantidades de instâncias, características e grupos
-#define N_INSTANCES 100
-#define N_FEATURES 2
+#define N_INSTANCES 20000
+#define N_FEATURES 500
 #define N_CLUSTERS 7
 
 typedef struct{
@@ -38,7 +38,7 @@ void create_artificial_k_means(k_means *km){
 
         // Atribuindo valores as features
         for (int f = 0; f < km->n_features; f++)
-            km->instances[i][f] = sin(f+rand()%10)*cos(i+rand()%6)*(i+2)*pow(-1,rand()%2); //sin(f+rand()%10)*cos(i+rand()%6)*(i+2)*pow(-1,rand()%2);
+            km->instances[i][f] = i; //sin(f+rand()%10)*cos(i+rand()%6)*(i+2)*pow(-1,rand()%2);
     }
 
     km->labels = (int *) malloc(km->n_instances*sizeof(int));
