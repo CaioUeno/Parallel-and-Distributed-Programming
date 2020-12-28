@@ -41,7 +41,6 @@ void create_artificial_k_means(k_means *km){
     }
 
     km->labels = (int *) malloc(km->n_instances*sizeof(int));
-
 }
 
 //------------------------------------------------------------------------------
@@ -95,8 +94,7 @@ int nearest_centroid_id(k_means *km, int i){
 void label_instances_sequential(k_means *km){
 
     for (int i = 0; i < km->n_instances; i++)
-        km->labels[i] = nearest_centroid_id(km, i); // Paralelizável \o/
-
+        km->labels[i] = nearest_centroid_id(km, i);
 }
 
 double update_centroids(k_means *km){
