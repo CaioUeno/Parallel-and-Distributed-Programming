@@ -9,9 +9,9 @@
 #define TOL 0.0001
 
 // Define as quantidades de instâncias, características e grupos.
-#define N_INSTANCES 20000
+#define N_INSTANCES 10000
 #define N_FEATURES 500
-#define N_CLUSTERS 7
+#define N_CLUSTERS 250
 
 typedef struct{
     int n_instances, n_features, n_clusters;
@@ -97,7 +97,7 @@ int nearest_centroid_id(k_means *km, int i){
     return min_index;
 }
 
-void label_instances_sequential(k_means *km){
+void label_instances(k_means *km){
 
     /*
         Função que atribui cada instância com o rótulo do centroide mais próximo.
@@ -309,7 +309,7 @@ int main(int argc, char const *argv[]){
     do{
         iter++;
 
-        label_instances_sequential(&km);
+        label_instances(&km);
         mean_deltas = update_centroids(&km);
 
         printf("Iteração: %d; Delta: %lf\n", iter, mean_deltas);

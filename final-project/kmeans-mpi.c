@@ -10,9 +10,9 @@
 #define TOL 0.0001
 
 // Define as quantidades de instâncias, características e grupos.
-#define N_INSTANCES 20000
+#define N_INSTANCES 10000
 #define N_FEATURES 500
-#define N_CLUSTERS 7
+#define N_CLUSTERS 250
 
 typedef struct{
     int n_instances, n_features, n_clusters;
@@ -29,7 +29,7 @@ void create_artificial_k_means(k_means *km){
     */
 
     // Aloca a matriz de instâncias.
-    km->instances = (double **) malloc(km->n_instances*sizeof(double));
+    km->instances = (double **) malloc(km->n_instances*sizeof(double *));
 
     // Aloca dinamicamente as instâncias.
     for(int i = 0; i < km->n_instances; i++){
@@ -53,7 +53,7 @@ void select_centroids(k_means *km){
     */
 
     // Aloca a matriz de centroides.
-    km->centroids = (double **) malloc(km->n_clusters*sizeof(double));
+    km->centroids = (double **) malloc(km->n_clusters*sizeof(double *));
 
     // Aloca dinamicamente os centroides.
     for(int c = 0; c < km->n_clusters; c++){
@@ -83,7 +83,7 @@ void counter(k_means *km){
         km->cluster_count[km->labels[i]]++;
 }
 
-int nearest_centroid_id(double *inst, double *cent){
+int nearest_centroid_id(double *inst, double **cents){
 
     /*
         Função que retorna o rótulo do centroide mais próximo da instância dada.
@@ -96,12 +96,9 @@ int nearest_centroid_id(double *inst, double *cent){
     for (int c = 0; c < N_CLUSTERS; c++){
         current_dist = 0;
 
-        // Recebe do mestre o vetor que contém o centroide corrente.
-        MPI_Recv(&cent[0], N_FEATURES, MPI_DOUBLE, 0, 99, MPI_COMM_WORLD, &status);
-
         // Calcula a distância euclidiana entre a instância e o centroide corrente.
         for (int f = 0; f < N_FEATURES; f++)
-            current_dist += pow((cent[f] - inst[f]), 2);
+            current_dist += pow((cents[c][f] - inst[f]), 2);
         current_dist = sqrt(current_dist);
 
         // Atribui como distância mínima, caso seja a primeira iteração.
@@ -243,9 +240,9 @@ void free_k_means(k_means *km){
         km->instances[i] = NULL;
     }
 
-    for(int i = 0; i < km->n_clusters; i++){
-        free(km->centroids[i]);
-        km->centroids[i] = NULL;
+    for(int c = 0; c < km->n_clusters; c++){
+        free(km->centroids[c]);
+        km->centroids[c] = NULL;
     }
 
     free(km->instances);
@@ -274,14 +271,19 @@ int main(int argc, char **argv){
     // Instancia uma struct do tipo k-means e variáveis.
     k_means km;
     double mean_deltas, current_delta;
-    double *instance, *centroid, *new_centroid;
+    double *instance, *centroid, *new_centroid, **centroids;
     int iter = 0;
 
     // Variáveis auxiliares para enviar instâncias e centroides como mensagens.
     instance = (double *) malloc(N_FEATURES*sizeof(double));
     centroid = (double *) malloc(N_FEATURES*sizeof(double));
     new_centroid = (double *) malloc(N_FEATURES*sizeof(double));
+    centroids = (double **) malloc(N_CLUSTERS*sizeof(double *));
+    for (int c = 0; c < N_CLUSTERS; c++)
+        centroids[c] = (double *) malloc(N_FEATURES*sizeof(double));
+
     int label, count;
+
 
     // Somente o processo mestre possui os dados.
     if (rank == 0){
@@ -292,6 +294,7 @@ int main(int argc, char **argv){
 
         create_artificial_k_means(&km);
         select_centroids(&km);
+
     }
 
     // Variáveis para medida do tempo.
@@ -310,6 +313,18 @@ int main(int argc, char **argv){
         if (rank == 0){
             mean_deltas = 0;
 
+            // Manda cada um dos centroides para todos os trabalhadores.
+            for(int p = 1; p < size; p++)
+                for (int c = 0; c < km.n_clusters; c++){
+
+                    // Coloca o centroide num vetor auxiliar.
+                    for (int f = 0; f < km.n_features; f++)
+                    centroid[f] = km.centroids[c][f];
+
+                    // Manda o centroide.
+                    MPI_Send(&centroid[0], N_FEATURES, MPI_DOUBLE, p, 99, MPI_COMM_WORLD);
+                }
+
             // Laço para rotular instâncias.
             for(int i = 0; i < km.n_instances; i += size-1){
                 for(int p = 1; p < size; p++){
@@ -322,17 +337,6 @@ int main(int argc, char **argv){
 
                         // Manda a instância corrente para o trabalhador p.
                         MPI_Send(&instance[0], km.n_features, MPI_DOUBLE, p, 99, MPI_COMM_WORLD);
-
-                        // Manda cada um dos centroides para o trabalhador p.
-                        for (int c = 0; c < km.n_clusters; c++){
-
-                            // Coloca o centroide num vetor auxiliar.
-                            for (int f = 0; f < km.n_features; f++)
-                            centroid[f] = km.centroids[c][f];
-
-                            // Manda o centroide.
-                            MPI_Send(&centroid[0], N_FEATURES, MPI_DOUBLE, p, 99, MPI_COMM_WORLD);
-                        }
                     }
                 }
 
@@ -408,13 +412,22 @@ int main(int argc, char **argv){
         // Trecho de código dos processos trabalhadores.
         else{
 
+            for(int c = 0; c < N_CLUSTERS; c++){
+
+                // Recebe do mestre o vetor que contém o centroide corrente.
+                MPI_Recv(&centroid[0], N_FEATURES, MPI_DOUBLE, 0, 99, MPI_COMM_WORLD, &status);
+
+                for(int f = 0; f < N_FEATURES; f++)
+                    centroids[c][f] = centroid[f];
+            }
+
             // Laço para rotular as instâncias.
             for(int i = rank-1; i < N_INSTANCES; i += size-1){
 
                 // Recebe do mestre uma instância.
                 MPI_Recv(&instance[0], N_FEATURES, MPI_DOUBLE, 0, 99, MPI_COMM_WORLD, &status);
 
-                label = nearest_centroid_id(instance, centroid);
+                label = nearest_centroid_id(instance, centroids);
 
                 // Manda para o mestre o rótulo do centroide mais próximo da instância recebida.
                 MPI_Send(&label, 1, MPI_INT, 0, 99, MPI_COMM_WORLD);
@@ -470,7 +483,7 @@ int main(int argc, char **argv){
 
     // Processo mestre salva e desaloca k-means.
     if(rank == 0){
-        
+
         // Obtém tempo e consumo de CPU após executar o algoritmo k-means (utilizando MPI).
         gettimeofday(&fim,0);
     	getrusage(RUSAGE_SELF, &r2);
@@ -493,9 +506,15 @@ int main(int argc, char **argv){
 
     MPI_Finalize();
 
+    for(int c = 0; c < N_CLUSTERS; c++){
+        free(centroids[c]);
+        centroids[c] = NULL;
+    }
+    free(centroids);
     free(instance);
     free(centroid);
     free(new_centroid);
+    centroids = NULL;
     instance = NULL;
     centroid = NULL;
     new_centroid = NULL;

@@ -11,9 +11,9 @@
 #define TOL 0.0001
 
 // Define as quantidades de instâncias, características e grupos.
-#define N_INSTANCES 20000
-#define N_FEATURES 500
-#define N_CLUSTERS 7
+#define N_INSTANCES 1000
+#define N_FEATURES 250
+#define N_CLUSTERS 25
 
 // Tipo de dado: k_means
 typedef struct{
@@ -144,7 +144,7 @@ void update_centroids(double *inst, double *cent, int *labs, double *disp){
         mean_deltas += sqrt(current_delta);
 
         // Armazena o deslocamento no vetor disp.
-        disp[c] = mean_deltas/N_CLUSTERS;
+        disp[c] = mean_deltas;
     }
 }
 //------------------------------------------------------------------------------
@@ -320,6 +320,7 @@ int main(int argc, char const *argv[]){
 
     // Rotula as instâncias e atualiza os centroides até satisfazer uma das condições (MAX_ITER ou TOL).
     do{
+        mean_deltas = 0;
         iter++;
 
         // Paralelização 1: Definição do rótulo das instâncias.
