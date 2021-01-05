@@ -27,21 +27,27 @@
 #include <sys/resource.h>
 #include <omp.h>
 
-float *A, *B, *C;
-
 int
 main(int argc, char *argv[])
 {
-	// Variáveis para definir dimensões da matriz, índices de vetores e quantidade de threads.
+	// Variáveis para matrizes, índices de vetores e quantidade de threads.
 	int lin_a = 100, col_a = 100, lin_b = 100, col_b = 100, lin_c = 100, col_c = 100;
 	int i, j, k;
-    int n_threads;
+    	int n_threads;
+	float *A, *B, *C;
 
+	// Variáveis relacionadas a arquivos.
 	FILE *arq;
+	char file_name[10];
 
 	// Variáveis para medida do tempo.
 	struct timeval inic, fim;
-    struct rusage r1, r2;
+    	struct rusage r1, r2;
+
+	n_threads = atof(argv[1]);
+	strcpy(file_name, argv[1]);
+
+	omp_set_num_threads(n_threads);
 
 	// printf("Linhas A: ");
 	// scanf("%d",&lin_a);
@@ -87,7 +93,7 @@ main(int argc, char *argv[])
 				C[i*col_c+j] = C[i*col_c+j] + A[i*col_a+k] * B[k*col_b+j];
 		}
 
-    // Obtém tempo e consumo de CPU após executar o algoritmo k-means (utilizando threads).
+    	// Obtém tempo e consumo de CPU após executar o algoritmo k-means (utilizando threads).
 	gettimeofday(&fim, 0);
 	getrusage(RUSAGE_SELF, &r2);
 
@@ -96,11 +102,12 @@ main(int argc, char *argv[])
 	//  (r2.ru_utime.tv_sec+r2.ru_utime.tv_usec/1000000.) - (r1.ru_utime.tv_sec+r1.ru_utime.tv_usec/1000000.),
 	//  (r2.ru_stime.tv_sec+r2.ru_stime.tv_usec/1000000.) - (r1.ru_stime.tv_sec+r1.ru_stime.tv_usec/1000000.));
 
-    //  n_threads = omp_get_num_threads();
+    	//  n_threads = omp_get_num_threads();
 
-    arq = fopen(argv[1], "a");
-    fprintf(arq, "%lf\n", (fim.tv_sec + fim.tv_usec/1000000.) - (inic.tv_sec + inic.tv_usec/1000000.));
-    fclose(arq);
+	strcat(file_name, ".txt");
+   	arq = fopen(file_name, "a");
+   	fprintf(arq, "%lf\n", (fim.tv_sec + fim.tv_usec/1000000.) - (inic.tv_sec + inic.tv_usec/1000000.));
+   	fclose(arq);
 	arq = NULL;
 
 	// Desaloca as variáveis alocadas dinamicamente.
