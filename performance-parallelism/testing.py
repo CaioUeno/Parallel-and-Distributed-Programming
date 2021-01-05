@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # removendo os arquivos .txt auxiliares
     os.system('rm *.txt')
 
-    # plotando gŕaficos
+    # plotando gráficos
     plt.title('Expected Time')
     plt.scatter(list(range(1, n_treads+1)), list(avg_times.values()), color='navy')
     plt.axvline(x=8, color='black')
