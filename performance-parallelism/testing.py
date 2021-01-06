@@ -25,11 +25,11 @@ if __name__ == "__main__":
         avg_times[n] = np.mean(times_n)
         speedups[n] = avg_times[1] / avg_times[n]
         efficiency[n] = speedups[n] / n
-        # os.system('rm '+str(n)+'.txt')
+        os.system('rm '+str(n)+'.txt')
 
     # plotando gráficos
     plt.title('Expected Time')
-    plt.scatter(list(range(1, n_treads+1, step)), list(avg_times.values()), color='navy')
+    plt.scatter(n_treads, list(avg_times.values()), color='navy')
     plt.axvline(x=8, color='black')
     plt.xlabel('Threads')
     plt.ylabel('Time (sec)')
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     plt.clf()
 
     plt.title('Speedup')
-    plt.scatter(list(range(1, n_treads+1, step)), list(speedups.values()), color='crimson')
+    plt.scatter(n_treads, list(speedups.values()), color='crimson')
     plt.axvline(x=8, color='black')
     plt.xlabel('Threads')
     plt.grid()
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     plt.clf()
 
     plt.title('Efficiency')
-    plt.scatter(list(range(1, n_treads+1, step)), list(efficiency.values()), color='lightseagreen')
+    plt.scatter(n_treads, list(efficiency.values()), color='lightseagreen')
     plt.axvline(x=8, color='black')
     plt.xlabel('Threads')
     plt.grid()

@@ -31,7 +31,7 @@ int
 main(int argc, char *argv[])
 {
 	// Variáveis para matrizes, índices de vetores e quantidade de threads.
-	int dim = 20000;
+	int dim = 2000;
 	int lin_a = dim, col_a = dim, lin_b = dim, col_b = dim, lin_c = dim, col_c = dim;
 	int i, j, k;
     	int n_threads;
