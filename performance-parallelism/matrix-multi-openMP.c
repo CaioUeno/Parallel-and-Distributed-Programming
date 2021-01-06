@@ -31,7 +31,8 @@ int
 main(int argc, char *argv[])
 {
 	// Variáveis para matrizes, índices de vetores e quantidade de threads.
-	int lin_a = 100, col_a = 100, lin_b = 100, col_b = 100, lin_c = 100, col_c = 100;
+	int dim = 20000;
+	int lin_a = dim, col_a = dim, lin_b = dim, col_b = dim, lin_c = dim, col_c = dim;
 	int i, j, k;
     	int n_threads;
 	float *A, *B, *C;
@@ -45,19 +46,10 @@ main(int argc, char *argv[])
     	struct rusage r1, r2;
 
 	n_threads = atof(argv[1]);
-	strcpy(file_name, argv[1]);
+	strcpy(file_name, argv[2]);
 
 	omp_set_num_threads(n_threads);
-
-	// printf("Linhas A: ");
-	// scanf("%d",&lin_a);
-	// printf("Colunas A / Linhas B: ");
-	// scanf("%d",&col_a);
-	// lin_b = col_a;
-	// printf("Colunas B: ");
-	// scanf("%d", &col_b);
-	// printf("\n");
-
+	
 	// Define a dimensão da matriz resultante.
 	lin_c = lin_a;
 	col_c = col_b;
@@ -104,7 +96,6 @@ main(int argc, char *argv[])
 
     	//  n_threads = omp_get_num_threads();
 
-	strcat(file_name, ".txt");
    	arq = fopen(file_name, "a");
    	fprintf(arq, "%lf\n", (fim.tv_sec + fim.tv_usec/1000000.) - (inic.tv_sec + inic.tv_usec/1000000.));
    	fclose(arq);
