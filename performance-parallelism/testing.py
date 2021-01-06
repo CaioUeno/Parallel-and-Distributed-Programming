@@ -55,3 +55,8 @@ if __name__ == "__main__":
     # plt.show()
     plt.savefig('efficiency.png')
     plt.clf()
+
+    # prints dos valores
+    print(avg_times.values())
+    print(speedups.values())
+    print(efficiency.values())
